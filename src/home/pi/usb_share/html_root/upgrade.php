@@ -1,4 +1,5 @@
-<?php 
+<?php
+require_once __DIR__ . '/includes/security.php';
 $_SESSION['pageClass'] = 'settings'; 
 require_once('includes/inc_rpi_host_details.php');
 require_once('includes/inc_usb_storage_details.php');
@@ -9,16 +10,16 @@ $upgrade_details = "";
 $version_history = "";
 
 try {
-  $current_version = file_get_contents('https://raw.githubusercontent.com/tds2021/Pi-Zero-W-Smart-USB-Flash-Drive/main/resource_files/current_version.txt');
+  $current_version = @file_get_contents('https://raw.githubusercontent.com/tds2021/Pi-Zero-W-Smart-USB-Flash-Drive/main/resource_files/current_version.txt', false, stream_context_create(['http' => ['timeout' => 3]]));
   $current_version_num = (float) preg_replace('/[^0-9]/', '', $current_version);
 } catch (exception $e) { }
 
 try {
-    $upgrade_details = file_get_contents('https://raw.githubusercontent.com/tds2021/Pi-Zero-W-Smart-USB-Flash-Drive/main/resource_files/upgrade_details.html');
+    $upgrade_details = @file_get_contents('https://raw.githubusercontent.com/tds2021/Pi-Zero-W-Smart-USB-Flash-Drive/main/resource_files/upgrade_details.html', false, stream_context_create(['http' => ['timeout' => 3]]));
   } catch (exception $e) { }
 
 try {
-    $version_history = file_get_contents('https://raw.githubusercontent.com/tds2021/Pi-Zero-W-Smart-USB-Flash-Drive/main/resource_files/version_history.html');
+    $version_history = @file_get_contents('https://raw.githubusercontent.com/tds2021/Pi-Zero-W-Smart-USB-Flash-Drive/main/resource_files/version_history.html', false, stream_context_create(['http' => ['timeout' => 3]]));
   } catch (exception $e) { }
 
 try {
@@ -30,6 +31,7 @@ try {
 <!doctype html>
 <html lang="en">
   <head>
+    <meta name="csrf-token" content="<?php echo htmlspecialchars($GLOBALS['csrf_token'], ENT_QUOTES); ?>">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="">
@@ -73,9 +75,10 @@ try {
                 <h1 class="h2"><img src="/img/bootstrap-icons/sliders.svg" style="height:1.2em;"> Upgrade Details</h1>
             </div>
 
-            <?php echo $upgrade_details; ?>
+            <p><a class="btn btn-primary" href="/includes/upgrade_portal.php">Install configured release</a></p>
+            <pre><?php echo htmlspecialchars(strip_tags($upgrade_details ?: ''), ENT_QUOTES); ?></pre>
 
-            <?php echo $version_history; ?>
+            <pre><?php echo htmlspecialchars(strip_tags($version_history ?: ''), ENT_QUOTES); ?></pre>
 
         </main>
       </div>

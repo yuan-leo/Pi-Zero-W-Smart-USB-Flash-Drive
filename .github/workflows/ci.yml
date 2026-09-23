@@ -1,23 +1,28 @@
-name: MasterDeployCI
+name: Validate and package
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - name: Create Release Folder
-      run: rsync -arv resource_files/filesystem ./release
-    - name: Switch to Release Folder
-      run: |
-        cd release
-        ls -la
-    - name: Bump version and push tag.
-      uses: anothrNick/github-tag-action@master
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        REPO_OWNER: adamoutler
-        PRERELEASE_SUFFIX: beta
-        DEFAULT_BUMP: patch
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Python regression tests
+        run: python3 -m unittest discover -s tests -v
+      - name: PHP syntax and security regression tests
+        run: |
+          find src/home/pi/usb_share/html_root deployment -name '*.php' -print0 | xargs -0 -n1 php -l
+          php tests/security_test.php
+      - name: Shell syntax
+        run: bash -n tools/install.sh src/home/pi/usb_share/scripts/rpi_usb_disk_create.sh
+      - name: Browser request regression tests
+        run: node tests/frontend_test.js
+      - name: Build deterministic release
+        run: python3 tools/build_release.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: usb-share
+          path: dist/*

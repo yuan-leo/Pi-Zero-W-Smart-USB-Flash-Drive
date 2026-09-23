@@ -1,5 +1,6 @@
 
-<?php 
+<?php
+require_once __DIR__ . '/includes/security.php';
 
 $_SESSION['pageClass'] = 'network_scan';
 require_once('includes/inc_rpi_host_details.php');
@@ -8,7 +9,7 @@ $current_version_num = 0;
 $local_version_num = 0;
 
 try {
-  $current_version = file_get_contents('https://raw.githubusercontent.com/tds2021/Pi-Zero-W-Smart-USB-Flash-Drive/main/resource_files/current_version.txt');
+  $current_version = @file_get_contents('https://raw.githubusercontent.com/tds2021/Pi-Zero-W-Smart-USB-Flash-Drive/main/resource_files/current_version.txt', false, stream_context_create(['http' => ['timeout' => 3]]));
   $current_version_num = (float) preg_replace('/[^0-9]/', '', $current_version);
 } catch (exception $e) { }
 
@@ -22,6 +23,7 @@ try {
 <!doctype html>
 <html lang="en">
   <head>
+    <meta name="csrf-token" content="<?php echo htmlspecialchars($GLOBALS['csrf_token'], ENT_QUOTES); ?>">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="">
@@ -120,7 +122,7 @@ try {
 
       function getDeviceList(updateUIDeviceList) {
           let req = new XMLHttpRequest();
-          req.open('GET', "/includes/util_rpi.php?a=network_scan");
+          openApiRequest(req, "/includes/util_rpi.php?a=network_scan");
         req.timeout = 5000;
           req.onload = function() {
               if (req.status == 200) {
@@ -129,7 +131,7 @@ try {
                   updateUIDeviceList(obj.device_list);          
               } 
           }
-          req.send();
+          sendApiRequest(req);
       } 
     </script>
   </body>

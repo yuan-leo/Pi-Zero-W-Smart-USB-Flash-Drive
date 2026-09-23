@@ -1,5 +1,6 @@
 
-<?php 
+<?php
+require_once __DIR__ . '/includes/security.php';
 
 $_SESSION['pageClass'] = 'tools';
 require_once('includes/inc_rpi_host_details.php');
@@ -8,7 +9,7 @@ $current_version_num = 0;
 $local_version_num = 0;
 
 try {
-  $current_version = file_get_contents('https://raw.githubusercontent.com/tds2021/Pi-Zero-W-Smart-USB-Flash-Drive/main/resource_files/current_version.txt');
+  $current_version = @file_get_contents('https://raw.githubusercontent.com/tds2021/Pi-Zero-W-Smart-USB-Flash-Drive/main/resource_files/current_version.txt', false, stream_context_create(['http' => ['timeout' => 3]]));
   $current_version_num = (float) preg_replace('/[^0-9]/', '', $current_version);
 } catch (exception $e) { }
 
@@ -22,6 +23,7 @@ try {
 <!doctype html>
 <html lang="en">
   <head>
+    <meta name="csrf-token" content="<?php echo htmlspecialchars($GLOBALS['csrf_token'], ENT_QUOTES); ?>">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="">
@@ -167,7 +169,7 @@ try {
         switchPanel("div_reboot_rpi_status");
 
         let req = new XMLHttpRequest();
-        req.open('GET', "/includes/util_rpi.php?a=reboot");
+        openApiRequest(req, "/includes/util_rpi.php?a=reboot");
         req.timeout = 3000;
         req.onload = function() {
             if (req.status == 200) {
@@ -176,7 +178,7 @@ try {
               sessionStorage.setItem('getRebootRpiStatus',getRebootStatusInterval); 
             }
         }
-        req.send();
+        sendApiRequest(req);
       }
       function shutdown() {
         start_time = new Date().getTime();
@@ -186,21 +188,21 @@ try {
         switchPanel("div_shutdown_status");
 
         let req = new XMLHttpRequest();
-        req.open('GET', "/includes/util_rpi.php?a=shutdown");
+        openApiRequest(req, "/includes/util_rpi.php?a=shutdown");
         req.timeout = 3000;
         req.onload = function() {
             if (req.status == 200) {
               window.setInterval("getShutdownStatus();", 18000);
             }
         }
-        req.send();
+        sendApiRequest(req);
       }
       function getRebootRpiStatus() {
         update_rpi = document.getElementById("div_reboot_rpi_status");
 
         if(update_rpi.classList.contains('show')) {
           let req = new XMLHttpRequest();
-          req.open('GET', "/includes/util_rpi.php?a=reboot_status");
+          openApiRequest(req, "/includes/util_rpi.php?a=reboot_status");
           req.timeout = 3000;
           req.onload = function() {
             if (req.status == 200) {
@@ -228,7 +230,7 @@ try {
               }
             } 
           }
-          req.send();
+          sendApiRequest(req);
         }
       }
       function getShutdownStatus() {
@@ -247,7 +249,7 @@ try {
         setStatus("ui_start_usb_status", "in progress");
 
         let req = new XMLHttpRequest();
-        req.open('GET', "/includes/util_usb_share.php?a=usb_reset");
+        openApiRequest(req, "/includes/util_usb_share.php?a=usb_reset");
         req.timeout = 3000;
         req.onload = function() {
             if (req.status == 200) {
@@ -255,14 +257,14 @@ try {
               sessionStorage.setItem('getResetUSBStatusInterval',getUSBStatusInterval); 
             }
         }
-        req.send();
+        sendApiRequest(req);
       }
       function unplugUSB() {
         switchPanel("div_unplug_usb_status");
         setStatus("ui_stop_usb_status_2", "in progress");
 
         let req = new XMLHttpRequest();
-        req.open('GET', "/includes/util_usb_share.php?a=usb_unplug");
+        openApiRequest(req, "/includes/util_usb_share.php?a=usb_unplug");
         req.timeout = 3000;
         req.onload = function() {
             if (req.status == 200) {
@@ -270,7 +272,7 @@ try {
               sessionStorage.setItem('getResetUSBStatusInterval',getUSBStatusInterval); 
             }
         }
-        req.send();
+        sendApiRequest(req);
       }
 
       function getResetUSBStatus() {
@@ -278,7 +280,7 @@ try {
 
         if(update_rpi.classList.contains('show')) {
           let req = new XMLHttpRequest();
-          req.open('GET', "/includes/util_usb_share.php?a=usb_reset_status", true);
+          openApiRequest(req, "/includes/util_usb_share.php?a=usb_reset_status", true);
           req.timeout = 3000;
           req.onload = function() {
             if (req.status == 200) {
@@ -310,7 +312,7 @@ try {
               }
             } 
           }
-          req.send();
+          sendApiRequest(req);
         }
       }
 
@@ -319,7 +321,7 @@ try {
 
         if(update_rpi.classList.contains('show')) {
           let req = new XMLHttpRequest();
-          req.open('GET', "/includes/util_usb_share.php?a=usb_reset_status");
+          openApiRequest(req, "/includes/util_usb_share.php?a=usb_reset_status");
           req.timeout = 3000;
           req.onload = function() {
             if (req.status == 200) {
@@ -346,7 +348,7 @@ try {
               }
             } 
           }
-          req.send();
+          sendApiRequest(req);
         }
       }
 

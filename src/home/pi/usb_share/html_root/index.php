@@ -1,5 +1,6 @@
 
-<?php 
+<?php
+require_once __DIR__ . '/includes/security.php';
 
 $_SESSION['pageClass'] = 'index'; 
 require_once('includes/inc_rpi_host_details.php');
@@ -9,7 +10,7 @@ $current_version_num = 0;
 $local_version_num = 0;
 
 try {
-  $current_version = file_get_contents('https://raw.githubusercontent.com/tds2021/Pi-Zero-W-Smart-USB-Flash-Drive/main/resource_files/current_version.txt');
+  $current_version = @file_get_contents('https://raw.githubusercontent.com/tds2021/Pi-Zero-W-Smart-USB-Flash-Drive/main/resource_files/current_version.txt', false, stream_context_create(['http' => ['timeout' => 3]]));
   $current_version_num = (float) preg_replace('/[^0-9]/', '', $current_version);
 } catch (exception $e) { }
 
@@ -23,6 +24,7 @@ try {
 <!doctype html>
 <html lang="en">
   <head>
+    <meta name="csrf-token" content="<?php echo htmlspecialchars($GLOBALS['csrf_token'], ENT_QUOTES); ?>">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="">
@@ -111,7 +113,7 @@ try {
               </tbody>
             </table>
             <div id="div_dropzone">
-              <form action="/includes/upload.php" class="dropzone" id="my-awesome-dropzone"></form>
+              <form action="/includes/upload.php" class="dropzone" id="my-awesome-dropzone"><input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($GLOBALS['csrf_token'], ENT_QUOTES); ?>"></form>
           
               <p style="text-align:center;">** File uploads limited to 128MB with a 60sec timeout. Larger files may need to be uplaoded via the network share. **</p>
             </div>
@@ -211,9 +213,9 @@ try {
             btn.type  = 'image';
             btn.value = 'Delete File';
             btn.addEventListener('click', function() {
-              url = "/includes/util_usb_share.php?a=delete_file&file='" + file_list[i]["name"] + "'";
+              url = "/includes/util_usb_share.php?" + new URLSearchParams({a: "delete_file", file: file_list[i].name});
               let req = new XMLHttpRequest();
-              req.open('GET', url);
+              openApiRequest(req, url);
               req.timeout = 3000;
               req.onload = function() {
                 if (req.status == 200) {
@@ -221,9 +223,8 @@ try {
                   getFileList();
                 } 
               }
-              req.send();
+              sendApiRequest(req);
             }, false);
-            url = encodeURI("/includes/util_usb_share.php?a=delete_file&file='" + file_list[i]["name"] + "'");
             newCell.appendChild(btn);
           }
         }
@@ -254,7 +255,7 @@ try {
       function getHostDetails() {
         url = "/includes/util_rpi.php?a=host_info";
         let req = new XMLHttpRequest();
-        req.open('GET', url);
+        openApiRequest(req, url);
         req.timeout = 3000;
         req.onload = function() {
           if (req.status == 200) {
@@ -263,29 +264,29 @@ try {
             updateUIHostDetail(obj);
 
             if(obj.anycubic_enabled.toLowerCase() == "true") {
-              window.setInterval("getAnycubicDetails();", 5000);
+
             } 
           }
         }
-        req.send();
+        sendApiRequest(req);
       }
       function getUSBShareDetails() {
         url = "/includes/util_usb_share.php?a=disk_stats";
         let req = new XMLHttpRequest();
         req.timeout = 3000;
-        req.open('GET', url);
+        openApiRequest(req, url);
         req.onload = function() {
           if (req.status == 200) {
             json = this.responseText.trim();
             updateUIUSBShareDetails(JSON.parse(json));
           } 
         }
-        req.send();
+        sendApiRequest(req);
       }
       function getFileList() {
         url = "/includes/util_usb_share.php?a=file_list";
         let req = new XMLHttpRequest();
-        req.open('GET', url);
+        openApiRequest(req, url);
         req.timeout = 3000;
         req.onload = function() {
           if (req.status == 200) {
@@ -294,29 +295,38 @@ try {
             updateUIUFileList(obj);
           } 
         }
-        req.send();
+        sendApiRequest(req);
       }
+      let printerRequestActive = false;
+      let printerTimer;
       function getAnycubicDetails() {
+        if (printerRequestActive) return;
+        clearTimeout(printerTimer);
+        printerRequestActive = true;
         url = "/includes/util_anycubic.php?a=printer_status";
         let req = new XMLHttpRequest();
-        req.open('GET', url);
-        req.timeout = 3000;
+        openApiRequest(req, url);
+        req.timeout = 10000;
+        req.addEventListener('loadend', function () {
+          printerRequestActive = false;
+          printerTimer = setTimeout(getAnycubicDetails, 5000);
+        });
         req.onload = function() {
           if (req.status == 200) {
             json = this.responseText.trim();
             updateAnycubicDetails(JSON.parse(json));
           } 
         }
-        req.send();
+        sendApiRequest(req);
       }
 
       Dropzone.options.myAwesomeDropzone = {
         maxFilesize: 128,
         maxFiles: 5,
-        forceChunking: true,
-        retryChunks: true,
+        chunking: false,
+        retryChunks: false,
         retryChunksLimit: 3,
-        parallelChunkUploads: true,
+        parallelChunkUploads: false,
         parallelUploads: 1,
         timeout:60000,
         init: function() {

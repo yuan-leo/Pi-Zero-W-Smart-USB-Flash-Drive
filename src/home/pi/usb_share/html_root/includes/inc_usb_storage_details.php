@@ -1,27 +1,10 @@
 <?php
-    $upload_str = '/home/pi/usb_share/upload/';
-    $disk_img = '/home/pi/usb_share/usb_share_disk.img';
-
-    $disk_size_bytes = (float) shell_exec('stat -c %s ' . $disk_img) ;
-    $disk_size = (float) round( abs($disk_size_bytes / 1024 / 1024 ),2) ;
-    $disk_size_gb = (float) round( abs($disk_size_bytes / 1024 / 1024 / 1024 ),2) ;
-    $disk_used = (float) round( abs(folderSize($upload_str) / 1024 / 1024 ),2);
-    $disk_free = (float) round($disk_size - $disk_used,2) ; 
-    $avail_disk_space = (float) shell_exec('/home/pi/usb_share/scripts/rpi_usb_disk_mgmt.py -a');
-    #$max_usb_share = (float) floor($avail_disk_space - 2);
-    $max_usb_share = (float) floor(($disk_used / 1024) + $avail_disk_space - 2);
-
-    #
-    # funcitons
-    #
-    function folderSize ($dir)
-    {
-        $size = 0;
-
-        foreach (glob(rtrim($dir, '/').'/*', GLOB_NOSORT) as $each) {
-            $size += is_file($each) ? filesize($each) : folderSize($each);
-        }
-
-        return $size;
-    }
-?>
+require_once __DIR__ . '/security.php';
+$upload_str = '/home/pi/usb_share/upload/';
+$disk_size_bytes = filesize('/home/pi/usb_share/usb_share_disk.img');
+$disk_size = round($disk_size_bytes / 1048576, 2);
+$disk_size_gb = round($disk_size_bytes / 1073741824, 2);
+$disk_free = round(disk_free_space($upload_str) / 1048576, 2);
+$disk_used = round(disk_total_space($upload_str) / 1048576 - $disk_free, 2);
+$avail_disk_space = disk_free_space('/home/pi/usb_share') / 1073741824;
+$max_usb_share = max(0, floor($avail_disk_space) - 2);

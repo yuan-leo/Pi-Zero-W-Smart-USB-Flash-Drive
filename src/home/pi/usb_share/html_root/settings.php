@@ -1,4 +1,5 @@
-<?php 
+<?php
+require_once __DIR__ . '/includes/security.php';
 $_SESSION['pageClass'] = 'settings'; 
 require_once('includes/inc_rpi_host_details.php');
 require_once('includes/inc_usb_storage_details.php');
@@ -7,7 +8,7 @@ $current_version_num = 0;
 $local_version_num = 0;
 
 try {
-  $current_version = file_get_contents('https://raw.githubusercontent.com/tds2021/Pi-Zero-W-Smart-USB-Flash-Drive/main/resource_files/current_version.txt');
+  $current_version = @file_get_contents('https://raw.githubusercontent.com/tds2021/Pi-Zero-W-Smart-USB-Flash-Drive/main/resource_files/current_version.txt', false, stream_context_create(['http' => ['timeout' => 3]]));
   $current_version_num = (float) preg_replace('/[^0-9]/', '', $current_version);
 } catch (exception $e) { }
 
@@ -21,6 +22,7 @@ try {
 <!doctype html>
 <html lang="en">
   <head>
+    <meta name="csrf-token" content="<?php echo htmlspecialchars($GLOBALS['csrf_token'], ENT_QUOTES); ?>">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="">
@@ -114,6 +116,8 @@ try {
               </table>
             </div>
             <div id="div_usb_config" class="show" style="padding-bottom:4em;">
+              <p>Creates an empty USB filesystem. The old image is retained as a backup; files are not copied.
+              Free space must fit the new image plus a 2 GB reserve.</p>
               <table>
                 <tr><td>SD Card Free Space:</td><td><?php echo number_format(($avail_disk_space),2), " GB"; ?></td></tr>
                 <tr><td>Current USB Storage:</td><td><span id="ui_disk_size"><?php echo number_format($disk_size_gb,2), " GB"; ?></span></td></tr>
@@ -138,15 +142,15 @@ try {
                     <td>
                       <select name="printer_model" id="printer_model" style="font-size:1.2em;" required>
                         <option value=""> -- Select Printer Model-- </option>
-                        <option value="Photon Mono SE" <?php if (strpos($printer_model, 'Mono SE') !== false) { echo "Selected"; } ?> >Photon Mono SE</option>
-                        <option value="Photon Mono X" <?php if (strpos($printer_model, 'Mono X') !== false) { echo "Selected"; } ?> >Photon Mono X</option>
+                        <option value="photon mono se" <?php if (strpos($printer_model, 'Mono SE') !== false) { echo "Selected"; } ?> >Photon Mono SE</option>
+                        <option value="photon mono x" <?php if (strpos($printer_model, 'Mono X') !== false) { echo "Selected"; } ?> >Photon Mono X</option>
                       </select>
                     </td>
                 </tr>
                 <tr>
                   <td colspan='2'>
                   <div class="checkbox" style="margin-top:1em;">
-                    <label><input type="checkbox" id="enable_print_protection" name="enable_print_protection" checked=true disabled=true > Enable Print Protection</label>
+                    <label><input type="checkbox" id="enable_print_protection" name="enable_print_protection" checked > Enable Print Protection</label>
                   </div>
 
                   <div class="checkbox" style="margin-top:1em;">
@@ -225,7 +229,7 @@ try {
                     <td ><p id="progress_stop_services"></p></td>
                 </tr>
                 <tr>
-                    <td class="progress_row" style="padding:1em 2em 1em 0;">Delete existing USB storage</td>
+                    <td class="progress_row" style="padding:1em 2em 1em 0;">Preserve old USB storage</td>
                     <td ><p id="progress_delete_usb"></p></td>
                 </tr> 
                 <tr>
@@ -237,7 +241,7 @@ try {
                     <td><p id="progress_create_fs"></p></td>
                 </tr> 
                 <tr>
-                    <td class="progress_row" style="padding:1em 2em 1em 0;">Reboot</td>
+                    <td class="progress_row" style="padding:1em 2em 1em 0;">Restart services</td>
                     <td><p id="progress_reboot"></p></td>
                 </tr>    
             </table>
@@ -300,6 +304,7 @@ try {
         disk_size = (obj.disk_size /1024);
 
         select = document.getElementById('new_usb_size');
+        select.textContent = '';
         
         for(i = 1; i <= max_usb_share; i++) {
           var opt = document.createElement('option');
@@ -330,12 +335,12 @@ try {
         getRebuildStatus();
         if(rebuilding_usb_share.toLowerCase() == "true") {
           switchPanel("div_rebuild_usb_status");
-
+          getRebuildStatus();
         } else {
           switchPanel("content_settings_forms");
         }
 
-        hideElement("anycubic_update_status");
+        hideElement("div_anycubic_update_status");
 
         if(anycubic_enabled.toLowerCase() == "true") {
           showElement("div_enabled_anycubic");
@@ -347,6 +352,7 @@ try {
 
       }
       function updateAnycubicDetails(obj) {
+        document.getElementById("enable_print_protection").checked = obj.protection_enabled !== false;
         date_run = obj.date_run;
         error = obj.error;
         printer_connection = obj.printer_connection;
@@ -398,7 +404,7 @@ try {
       async function getHostDetails() {
         url = "/includes/util_rpi.php?a=host_info";
         let req = new XMLHttpRequest();
-        req.open('GET', url);
+        openApiRequest(req, url);
         req.timeout = 3000;
         req.onload = function() {
           if (req.status == 200) {
@@ -407,12 +413,12 @@ try {
             updateUIHostDetail(obj);
           }
         }
-        req.send();
+        sendApiRequest(req);
       }
       async function getAnycubicDetails() {
         url = "/includes/util_anycubic.php?a=printer_status";
         let req = new XMLHttpRequest();
-        req.open('GET', url);
+        openApiRequest(req, url);
         req.timeout = 3000;
         req.onload = function() {
           if (req.status == 200) {
@@ -420,12 +426,12 @@ try {
             updateAnycubicDetails(JSON.parse(json));
           } 
         }
-        req.send();
+        sendApiRequest(req);
       }
       async function getUSBShareDetails() {
         url = "/includes/util_usb_share.php?a=disk_stats";
         let req = new XMLHttpRequest();
-        req.open('GET', url);
+        openApiRequest(req, url);
         req.timeout = 3000;
         req.onload = function() {
           if (req.status == 200) {
@@ -433,7 +439,7 @@ try {
             updateUIUSBShareDetails(JSON.parse(json));
           } 
         }
-        req.send();
+        sendApiRequest(req);
       }
 
 
@@ -441,7 +447,7 @@ try {
       async function enableAnycubic() {
         url = "/includes/util_anycubic.php?a=enable_anycubic"
         let req = new XMLHttpRequest();
-        req.open('GET', url);
+        openApiRequest(req, url);
         //req.timeout = 3000;
         req.onload = function() {
           if (req.status == 200) {
@@ -450,14 +456,14 @@ try {
             window.location.href = "/settings.php";
           } 
         }
-        req.send();
+        sendApiRequest(req);
 
         showElement("content_settings_forms");
       }
       async function disableAnycubic() {
         url = "/includes/util_anycubic.php?a=disable_anycubic"
         let req = new XMLHttpRequest();
-        req.open('GET', url, false);
+        openApiRequest(req, url, false);
         //req.timeout = 3000;
         req.onload = function() {
           if (req.status == 200) {
@@ -466,7 +472,7 @@ try {
             window.location.href = "/settings.php";
           } 
         }
-        req.send();
+        sendApiRequest(req);
 
         showElement("content_settings_forms");
       }
@@ -484,10 +490,10 @@ try {
         if(printer_ip != "") {
           switchPanel("div_anycubic_update_status");
 
-          url = "/includes/util_anycubic.php?a=update&printer_ip='" + printer_ip + "'&printer_model='" + printer_model + "'&enable_wifi_file='" + enable_wifi_file + "'&enable_print_protection='" + enable_print_protection + "'";
+          url = "/includes/util_anycubic.php?" + new URLSearchParams({a: "update", printer_ip, printer_model, enable_wifi_file, enable_print_protection});
 
           let req = new XMLHttpRequest();
-          req.open('GET', url);
+          openApiRequest(req, url);
           //req.timeout = 3000;
           req.onload = function() {
             if (req.status == 200) {
@@ -497,7 +503,7 @@ try {
               window.location.href = "/settings.php";
             } 
           }
-          req.send();
+          sendApiRequest(req);
         }
 
         
@@ -520,7 +526,7 @@ try {
 
         updateElement("ui_new_hostname",new_hostname);
         updateElement("ui_enable_camera",(enable_camera == 'on') ? 'Yes' : 'No');
-        updateElement("ui_camera_rotation",(rotation == 0) ? 'No Rotation' : rotation + '&deg;');
+        updateElement("ui_camera_rotation",(rotation == 0) ? 'No Rotation' : rotation + '°');
 
         setRebuildStatus("ui_rpi_update_camera_status", "not started");
         setRebuildStatus("ui_rpi_update_hostname_status", "not started");
@@ -528,10 +534,10 @@ try {
 
         switchPanel("div_rip_update_status");
 
-        url = "/includes/util_rpi.php?a=update&current_hostname='" + current_hostname + "'&new_hostname='" + new_hostname + "'&enable_camera='" + enable_camera + "'&rotation=" + rotation;
+        url = "/includes/util_rpi.php?" + new URLSearchParams({a: "update", current_hostname, new_hostname, enable_camera, rotation});
 
         let req = new XMLHttpRequest();
-        req.open('GET', url, true);
+        openApiRequest(req, url, true);
         req.timeout = 3000;
         req.onload = function() {
           if (req.status == 200) {
@@ -542,20 +548,26 @@ try {
             getUpdateRpiStatus();
           } 
         }
-        req.send();
+        sendApiRequest(req);
       }
       function getUpdateRpiStatus() {
         update_rpi = document.getElementById("div_rip_update_status");
 
         if(update_rpi.classList.contains('show')) {
           let req = new XMLHttpRequest();
-          req.open('GET', "/includes/util_rpi.php?a=update_status");
+          openApiRequest(req, "/includes/util_rpi.php?a=update_status");
           req.timeout = 3000;
           req.onload = function() {
             if (req.status == 200) {
               json = this.responseText.trim();
               obj = JSON.parse(json);
               var progress = obj.status.trim().toLowerCase();
+              if (progress === "error") {
+                window.clearInterval(sessionStorage.getItem("getRebuildStatusInterval"));
+                window.clearInterval(sessionStorage.getItem("getUpdateRpiStatusInterval"));
+                alert("Operation failed. The previous disk image is retained; check the Pi logs before retrying.");
+                return;
+              }
 
               sessionStorage.setItem("rpi_update_progress", progress);
 
@@ -578,16 +590,18 @@ try {
                 setRebuildStatus("ui_rpi_update_reboot_status", "in progress");
                 
                   let req2 = new XMLHttpRequest();
-                  req2.open('GET', "/includes/util_rpi.php?a=reboot");
+                  openApiRequest(req2, "/includes/util_rpi.php?a=reboot");
                   req2.timeout = 3000;
                   req2.onload = function() {
                     if (req2.status == 200) {
                     }
                   }
-                  req2.send();
+                  sendApiRequest(req2);
               }
               else if(progress == "complete")
               {
+                window.clearInterval(sessionStorage.getItem("getRebuildStatusInterval"));
+                window.clearInterval(sessionStorage.getItem("getUpdateRpiStatusInterval"));
                 setRebuildStatus("ui_rpi_update_camera_status", "complete");
                 setRebuildStatus("ui_rpi_update_hostname_status", "complete");
                 setRebuildStatus("ui_rpi_update_reboot_status", "complete");
@@ -610,7 +624,7 @@ try {
               }
             } 
           }
-          req.send();
+          sendApiRequest(req);
         }
       }
 
@@ -620,8 +634,6 @@ try {
         start_time = new Date().getTime();
         sessionStorage.setItem('RebuildUSBStart',start_time);
 
-        let getRebuildStatusInterval = window.setInterval("getRebuildStatus();", 3000);
-        sessionStorage.setItem('getRebuildStatusInterval',getRebuildStatusInterval);
 
         getHostDetailsInterval = sessionStorage.getItem("getHostDetailsInterval")
         window.clearInterval(getHostDetailsInterval);
@@ -644,110 +656,52 @@ try {
         url = "/includes/util_rpi.php?a=rebuild_usb&usb_size=" + new_disk_size;
 
         let req = new XMLHttpRequest();
-        req.open('GET', url, true);
+        openApiRequest(req, url, true);
         req.timeout = 3000;
         req.onload = function() {
           if (req.status == 200) {
             json = this.responseText.trim();
             obj = JSON.parse(json);
-            sleep(3000);
             getRebuildStatus();
           } 
         }
-        req.send();
+        sendApiRequest(req);
         
       }
+      let rebuildTimer;
+      let rebuildRequestActive = false;
       function getRebuildStatus() {
-        rebuild_usb = document.getElementById("div_rebuild_usb_status");
-
-        if(rebuild_usb.classList.contains('show')) {
-          new_img_size = (sessionStorage.getItem("usb_rebuild_size") * 1024);
-
-
-          let req = new XMLHttpRequest();
-          req.open('GET', "/includes/util_rpi.php?a=rebuild_status");
-          req.timeout = 3000;
-          req.onload = function() {
-            if (req.status == 200) {
-              json = this.responseText.trim();
-              obj = JSON.parse(json);
-              var progress = obj.status.trim().toLowerCase();
-
-              sessionStorage.setItem("usb_rebuild_progress", progress);
-
-              if(progress == "stop_services")
-              {
-                  setRebuildStatus("progress_stop_services", "in progress");
-                  setRebuildStatus("progress_delete_usb", "not started");
-                  setRebuildStatus("progress_create_img", "not started");
-                  setRebuildStatus("progress_create_fs", "not started");
-                  setRebuildStatus("progress_reboot", "not started");
-              }
-              else if(progress == "delete_image")
-              {
-                  setRebuildStatus("progress_stop_services", "complete");
-                  setRebuildStatus("progress_delete_usb", "in progress");
-                  setRebuildStatus("progress_create_img", "not started");
-                  setRebuildStatus("progress_create_fs", "not started");
-                  setRebuildStatus("progress_reboot", "not started");
-              }
-              else if(progress == "create_image")
-              {
-                  setRebuildStatus("progress_stop_services", "complete");
-                  setRebuildStatus("progress_delete_usb", "complete");
-                  setRebuildStatus("progress_create_img", "in progress");
-                  setRebuildStatus("progress_create_fs", "not started");
-                  setRebuildStatus("progress_reboot", "not started");
-              }
-              else if(progress == "create_fs")
-              {
-                  setRebuildStatus("progress_stop_services", "complete");
-                  setRebuildStatus("progress_delete_usb", "complete");
-                  setRebuildStatus("progress_create_img", "complete");
-                  setRebuildStatus("progress_create_fs", "in progress");
-                  setRebuildStatus("progress_reboot", "not started");
-              }
-              else if(progress == "reboot")
-              {
-                  setRebuildStatus("progress_stop_services", "complete");
-                  setRebuildStatus("progress_delete_usb", "complete");
-                  setRebuildStatus("progress_create_img", "complete");
-                  setRebuildStatus("progress_create_fs", "complete");
-                  setRebuildStatus("progress_reboot", "in progress");
-                  let req2 = new XMLHttpRequest();
-                  req2.open('GET', "/includes/util_rpi.php?a=rebuild_reboot");
-                  req.timeout = 15000;
-                  req2.onload = function() {
-                      if (req2.status == 200) {
-                      }
-                  }
-                  req2.send();
-              }
-              else if(progress == "complete")
-              {
-                  setRebuildStatus("progress_stop_services", "complete");
-                  setRebuildStatus("progress_delete_usb", "complete");
-                  setRebuildStatus("progress_create_img", "complete");
-                  setRebuildStatus("progress_create_fs", "complete");
-                  setRebuildStatus("progress_reboot", "complete");
-              }
-              else if(progress == "stopped")
-              {
-                start_time = sessionStorage.getItem('RebuildUSBStart');
-                curr_time = new Date().getTime();
-
-                if((curr_time - start_time) > 60000) {
-                  sessionStorage.removeItem("usb_rebuild_size");
-                  sessionStorage.removeItem("usb_rebuild_progress");
-                  sessionStorage.removeItem('getRebuildStatusInterval');
-                  sessionStorage.removeItem('RebuildUSBStart');
-                  window.location.href = "/settings.php";
-                }
-              }
-            } 
+        const panel = document.getElementById("div_rebuild_usb_status");
+        if (!panel.classList.contains('show') || rebuildRequestActive) return;
+        clearTimeout(rebuildTimer);
+        rebuildRequestActive = true;
+        let finished = false;
+        const req = new XMLHttpRequest();
+        openApiRequest(req, "/includes/util_rpi.php?a=rebuild_status");
+        req.timeout = 5000;
+        req.onload = function () {
+          if (req.status !== 200) return;
+          const progress = JSON.parse(req.responseText).status.trim();
+          const order = ['progress_create_img', 'progress_create_fs', 'progress_stop_services',
+                         'progress_delete_usb', 'progress_reboot'];
+          const phase = {queued: -1, create_image: 0, create_fs: 1, stop_services: 2, complete: 5}[progress];
+          if (progress === 'error') {
+            finished = true;
+            alert('Rebuild failed. The original image or its .previous backup is retained. Check the job result before retrying.');
+          } else if (phase !== undefined) {
+            order.forEach((id, index) => setRebuildStatus(id, index < phase ? 'complete' :
+                (index === phase ? 'in progress' : 'not started')));
+            if (progress === 'complete') {
+              finished = true;
+              setTimeout(() => { window.location.href = '/settings.php'; }, 1500);
+            }
           }
-          req.send();
-        }
+        };
+        req.addEventListener('loadend', function () {
+          rebuildRequestActive = false;
+          if (!finished) rebuildTimer = setTimeout(getRebuildStatus, 3000);
+        });
+        sendApiRequest(req);
       }
     </script>
   </body>

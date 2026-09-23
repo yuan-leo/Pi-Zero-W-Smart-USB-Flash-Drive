@@ -1,0 +1,2 @@
+# No shells, interpreters, rm, or arbitrary scripts are granted to the web account.
+www-data ALL=(root) NOPASSWD: /usr/local/lib/usb-share/admin.py

@@ -1,73 +1,31 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
+"""One bounded printer snapshot, serialized as real JSON."""
+import json
+from usb_share_common import query, read_flag
 
-import socket
-import re
 
-HOST = ''
-PORT = 6000
-MODEL = ''
+def get_status():
+    data = dict(ip_address=read_flag('printer_ip'), printer_model=read_flag('printer_model'),
+                connection='Not Connected', files='', printer_status='', print_job='',
+                layers_complete='', percent_complete='', seconds_remaining=0, resin_required='')
+    try:
+        files, status = query(['getfiles', 'getstatus'])
+        fields = status.split(',')
+        if len(fields) < 3 or fields[0] != 'getstatus' or fields[1] not in ('print', 'pause', 'stop'):
+            raise ValueError('Invalid status response')
+        data['files'] = files
+        data['printer_status'] = {'print': 'Printing', 'pause': 'Paused', 'stop': 'Stopped'}[fields[1]]
+        if fields[1] == 'print':
+            if len(fields) < 10:
+                raise ValueError('Incomplete print status')
+            data.update(print_job=fields[2], percent_complete=fields[4] + '%',
+                        layers_complete=fields[5] + ' / ' + fields[3],
+                        seconds_remaining=int(fields[7]), resin_required=fields[8])
+        data['connection'] = 'Connected'
+    except (OSError, ValueError, IndexError):
+        pass
+    return data
 
-try:
-    with open('/home/pi/usb_share/flags/printer_ip','r') as f:
-        HOST = f.read().strip()
-        f.close()
-except:
-    HOST = ''
 
-try:
-    with open('/home/pi/usb_share/flags/printer_model','r') as f:
-        MODEL = f.read().strip()
-        f.close()
-except:
-    MODEL = ''
-
-data = {}
-data['ip_address'] = HOST
-data['printer_model'] = MODEL
-
-try:
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.settimeout(5)
-    s.connect((HOST,PORT))
-
-    s.send(b'getfiles,')
-    data['files'] = s.recv(1024).decode('UTF-8')
-
-    s.send(b'getmode,')
-    data['mode'] = s.recv(1024).decode('UTF-8')
-
-    s.send(b'getstatus,')
-    STATUS = s.recv(1024).decode('UTF-8')
-    arr = STATUS.split(',')
-
-    data['status_raw'] = STATUS
-
-    if arr[1] == 'print':
-        data['printer_status'] = 'Printing'
-    elif arr[1] == 'pause':
-        data['printer_status'] = 'Paused'
-    else:
-        data['printer_status'] = 'Stopped'
-
-    if arr[1] == 'print':
-        data['print_job'] = arr[2]
-        data['percent_complete'] = str(arr[4]) + "%"
-        data['layers_complete'] = str(arr[5]) + " / " + str(arr[3])
-        data['seconds_remaining'] = arr[7]
-        data['resin_required'] = arr[8]
-    else:
-        data['print_job'] = ''
-        data['total_layers'] = ''
-        data['layers_complete'] = ''
-        data['percent_complete'] = ''
-        data['seconds_remaining'] = ''
-        data['time_remaining'] = ''
-        data['resin_required'] = ''
-
-    data['connection'] = 'Connected'
-
-    s.close()
-except:
-    data['connection'] = 'Not Connected'
-
-print(data)
+if __name__ == '__main__':
+    print(json.dumps(get_status()))

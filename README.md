@@ -2,6 +2,11 @@
 
 SMB enabled network share that appears as a USB drive to a connected device, and web-based portal for controlling AnyCubic Mono X/SE printers. 
 
+**Security update:** The maintained source now requires portal authentication,
+CSRF-checked administrative requests, and a one-time migration of existing images.
+Read [Security and deployment](SECURITY_AND_DEPLOYMENT.md) before installing or
+upgrading. The legacy image instructions below describe older releases.
+
 ## Support
 
 This project is free to use, and I hope you do, but it also take a lot of time to keep working on making it better. Consider "buying me a book" through this [link](https://www.buymeacoffee.com/tds2021) to help keep this development going.  That way I can learning new ways to make this (and other projects) better.  Think of it as karma-ware.  Have a great day!

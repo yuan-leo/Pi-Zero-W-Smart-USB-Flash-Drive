@@ -1,9 +1,11 @@
-<?php 
+<?php
+require_once __DIR__ . '/security.php';
 $flag_dir = '/home/pi/usb_share/flags';
-$printer_model = strtolower(trim(file_get_contents("$flag_dir/printer_model")));
+$printer_model = strtolower(trim(@file_get_contents("$flag_dir/printer_model") ?: ""));
 ?>
 <div class="position-sticky pt-3">
   <ul class="nav flex-column">
+    <li class="nav-item"><a class="nav-link" href="/includes/upgrade_portal.php">Updates</a></li>
     <li class="nav-item">
       <a class="nav-link <?php if($_SESSION['pageClass'] == 'index' ) echo 'active'; ?>" aria-current="page" href="/index.php">
         <span data-feather="home"></span>
@@ -76,7 +78,7 @@ $printer_model = strtolower(trim(file_get_contents("$flag_dir/printer_model")));
 
     if($local_version != "")
     {
-      echo "<div>ver: <a href='/upgrade.php'>", $local_version, "</a></div>";
+      echo "<div>ver: <a href='/upgrade.php'>", htmlspecialchars($local_version, ENT_QUOTES), "</a></div>";
     }
   } catch (exception $e) { }
   

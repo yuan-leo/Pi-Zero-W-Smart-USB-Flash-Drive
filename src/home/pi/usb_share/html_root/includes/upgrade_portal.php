@@ -1,83 +1,50 @@
-<?php 
-$submitButton = strtolower($_POST["submitButton"]);
-?>
+<?php require_once __DIR__ . '/security.php'; ?>
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="">
-    <meta name="author" content="Troy Smith">
-
-    <title>USB Share Management Console : Upgrade Portal</title>
-
-    
-
-    <!-- Bootstrap core CSS -->
-<link href="/css/bootstrap.min.css" rel="stylesheet">
-
-    <style>
-      .bd-placeholder-img {
-        font-size: 1.125rem;
-        text-anchor: middle;
-        -webkit-user-select: none;
-        -moz-user-select: none;
-        user-select: none;
-      }
-
-      @media (min-width: 768px) {
-        .bd-placeholder-img-lg {
-          font-size: 3.5rem;
-        }
-      }
-    </style>
-
-    
-    <!-- Custom styles for this template -->
-    <link href="/css/dashboard.css" rel="stylesheet">
-  </head>
-  <body >
-    <header class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0 shadow">
-    <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3" href="/index.php"><?php echo strtoupper(gethostname());?></a>
-    <button class="navbar-toggler position-absolute d-md-none collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-    </button>
-    </header>
-
-    <div class="container-fluid">
-    <div class="row">
-        <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse">
-        </nav>
-
-        <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
-   
-        <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-            <h1 class="h2">Upgrade Portal</h1>
-        </div>
-        <h5>Upgrade in progress <img src='/img/progress.gif' style='height:2em;'></h5>
-        </br>
-
-        <script>
-            window.setInterval("reloadPage();", 5000);
-
-            function reloadPage() {
-                let req = new XMLHttpRequest();
-                req.open('GET', "/includes/util_usb_share.php?a=upgrade");
-                req.timeout = 3000;
-                req.onload = function() {
-                if (req.status == 200) {
-                    window.location.href = "/settings.php";
-                } 
-                }
-                req.send();
-            }
-        </script>
-
-        </main>
-    </div>
-    </div>
-    <script src="/js/bootstrap.bundle.min.js"></script>
-
-  </body>
-</html>
-
+<html lang="en"><head><meta charset="utf-8">
+<meta name="csrf-token" content="<?php echo htmlspecialchars($GLOBALS['csrf_token'], ENT_QUOTES); ?>">
+<title>Upgrade USB Share</title><link rel="stylesheet" href="/css/bootstrap.min.css"></head>
+<body class="container py-4"><h1>Upgrade USB Share</h1>
+<p id="status">Ready to install the release configured by your administrator.</p>
+<button id="start" class="btn btn-primary">Install configured release</button>
+<a href="/settings.php">Back to settings</a>
+<script src="/js/usb_share_functions.js"></script>
+<script>
+const statusLabel = document.getElementById('status');
+const startButton = document.getElementById('start');
+let job = sessionStorage.getItem('upgradeJob');
+async function request(action, args = {}, mutate = false) {
+    const params = new URLSearchParams(Object.assign({a: action}, args));
+    const options = mutate ? {method: 'POST', headers: {
+        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content,
+        'Content-Type': 'application/x-www-form-urlencoded'}, body: params.toString()} : {};
+    const response = await fetch('/includes/util_usb_share.php' + (mutate ? '' : '?' + params), options);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Upgrade request failed');
+    return data;
+}
+async function poll() {
+    try {
+        const data = await request('upgrade_status', {job_id: job});
+        statusLabel.textContent = data.error || data.status;
+        if (data.status === 'complete' || data.status === 'error') {
+            sessionStorage.removeItem('upgradeJob');
+            startButton.disabled = false;
+        } else setTimeout(poll, 3000);
+    } catch (error) {
+        statusLabel.textContent = error.message + '. Reload to resume checking this job.';
+    }
+}
+startButton.addEventListener('click', async function () {
+    startButton.disabled = true;
+    try {
+        const data = await request('upgrade', {}, true);
+        job = data.job_id;
+        sessionStorage.setItem('upgradeJob', job);
+        poll();
+    } catch (error) {
+        statusLabel.textContent = error.message;
+        startButton.disabled = false;
+    }
+});
+if (job) { startButton.disabled = true; poll(); }
+</script></body></html>

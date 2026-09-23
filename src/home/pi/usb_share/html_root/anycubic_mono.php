@@ -1,4 +1,5 @@
-<?php 
+<?php
+require_once __DIR__ . '/includes/security.php';
 
 $_SESSION['pageClass'] = 'anycubic';
 require_once('includes/inc_rpi_host_details.php');
@@ -8,7 +9,7 @@ $current_version_num = 0;
 $local_version_num = 0;
 
 try {
-  $current_version = file_get_contents('https://raw.githubusercontent.com/tds2021/Pi-Zero-W-Smart-USB-Flash-Drive/main/resource_files/current_version.txt');
+  $current_version = @file_get_contents('https://raw.githubusercontent.com/tds2021/Pi-Zero-W-Smart-USB-Flash-Drive/main/resource_files/current_version.txt', false, stream_context_create(['http' => ['timeout' => 3]]));
   $current_version_num = (float) preg_replace('/[^0-9]/', '', $current_version);
 } catch (exception $e) { }
 
@@ -22,6 +23,7 @@ try {
 <!doctype html>
 <html lang="en">
     <head>
+    <meta name="csrf-token" content="<?php echo htmlspecialchars($GLOBALS['csrf_token'], ENT_QUOTES); ?>">
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="description" content="">
@@ -227,9 +229,8 @@ if(strpos($printer_files, 'ERROR2') !== false) { ?>
             document.getElementById("stopPrinting").addEventListener("click", stopPrinting);
             document.getElementById("resumePrinting").addEventListener("click", resumePrinting);
             getPrinterStatus();
-            window.setInterval("getPrinterStatus();", 2500);
-            getFileList();
-            window.setInterval("getFileList();",8000);
+
+
 
             <?php if(file_exists('/home/pi/usb_share/flags/enable_camera')) { ?>
                 reloadIMG();
@@ -247,18 +248,18 @@ if(strpos($printer_files, 'ERROR2') !== false) { ?>
             });
         }
         function updateCTRL(ctrl,some) {
-            document.getElementById(ctrl).innerHTML = some;
+            document.getElementById(ctrl).textContent = some;
         }
         function reloadIMG() {
-            var temp = "http://<?php echo $ip_address ?>:8080/?action=stream&" + new Date().getTime();
+            var temp = "/camera_feed.php?refresh=" + new Date().getTime();
             newImage = new Image();
             newImage.src = temp;
             document.getElementById("videoStream").src = newImage.src;
         }
         function monoXControl(action) {
             let req = new XMLHttpRequest();
-            url = "/includes/util_anycubic.php?a=anycubic_action&cmd=" + action;
-            req.open('GET', url);
+            url = "/includes/util_anycubic.php?" + new URLSearchParams({a: "anycubic_action", cmd: action});
+            openApiRequest(req, url);
             req.timeout = 3000;
             req.onload = function() {
             if (req.status == 200) {
@@ -269,14 +270,19 @@ if(strpos($printer_files, 'ERROR2') !== false) { ?>
                 }
             }
             }
-            req.send();
+            sendApiRequest(req);
         }
 
         function pausePrinting() { monoXControl('pause'); }
         function resumePrinting() { monoXControl('resume'); }
         function stopPrinting() { monoXControl('stop'); }
 
+        let printerRequestActive = false;
+        let printerTimer;
         function getPrinterStatus() {
+            if (printerRequestActive) return;
+            clearTimeout(printerTimer);
+            printerRequestActive = true;
             btn_pause = document.getElementById("pausePrinting_span");
             btn_stop = document.getElementById("stopPrinting_span");
             btn_resume = document.getElementById("resumePrinting_span");
@@ -290,14 +296,19 @@ if(strpos($printer_files, 'ERROR2') !== false) { ?>
             let req = new XMLHttpRequest();
             url = "/includes/util_anycubic.php?a=printer_status";
 
-            req.open('GET', url);
-            req.timeout = 4500;
+            openApiRequest(req, url);
+            req.timeout = 10000;
+            req.addEventListener('loadend', function () {
+                printerRequestActive = false;
+                printerTimer = setTimeout(getPrinterStatus, 2500);
+            });
 
             req.onload = function() {
                 if (req.status == 200) {
                     //get json object
                     var json = this.responseText.trim();
                     var obj = JSON.parse(json);
+                    if (obj.printer_status !== "Printing") updateUIFileList(obj.printer_files);
                     //add current time to json
                     obj.refresh_time = new Date();
                     json = JSON.stringify(obj);
@@ -389,13 +400,13 @@ if(strpos($printer_files, 'ERROR2') !== false) { ?>
                     content_loading.className = "hidden";
                 }
             }
-            req.send();
+            sendApiRequest(req);
         }
         function getFileList() {
             let req = new XMLHttpRequest();
             url = "/includes/util_anycubic.php?a=printer_status";
 
-            req.open('GET', url);
+            openApiRequest(req, url);
             req.timeout = 4500;
 
             req.onload = function() {
@@ -418,7 +429,7 @@ if(strpos($printer_files, 'ERROR2') !== false) { ?>
                     }  
                 }
             }
-            req.send();
+            sendApiRequest(req);
         }
 
         function updateUIFileList(file_list) {
@@ -446,7 +457,7 @@ if(strpos($printer_files, 'ERROR2') !== false) { ?>
                     img = document.createElement("img");
                     img.className = "icon icon_sm";
                     img.src = "/img/play-circle.svg";
-                    img.setAttribute("onclick","startPrint('" + file_details[1] + "');")
+                    img.addEventListener("click", function () { startPrint(file_details[1]); });
 
                     newCell = newRow.insertCell();
                     newCell .style.textAlign = "center";

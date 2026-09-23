@@ -1,0 +1,7 @@
+*.py text eol=lf
+*.php text eol=lf
+*.js text eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+deployment/* text eol=lf
+resource_files/filesystem/usr_local_bin/* text eol=lf

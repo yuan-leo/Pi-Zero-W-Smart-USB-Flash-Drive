@@ -1,0 +1,5 @@
+d /run/usb-share 0755 root root -
+f /run/usb-share/storage.lock 0660 root www-data -
+f /run/usb-share/admin.lock 0600 root root -
+f /run/usb-share/watcher.lock 0600 root root -
+d /var/cache/usb-share 0750 www-data www-data -

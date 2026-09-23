@@ -1,4 +1,5 @@
-<?php 
+<?php
+require_once __DIR__ . '/includes/security.php';
 $_SESSION['pageClass'] = 'camera_stream';
 $ip_array = explode(" ",shell_exec('hostname -I'));
 $ip_address = $ip_array[0];
@@ -7,7 +8,7 @@ $current_version_num = 0;
 $local_version_num = 0;
 
 try {
-  $current_version = file_get_contents('https://raw.githubusercontent.com/tds2021/Pi-Zero-W-Smart-USB-Flash-Drive/main/resource_files/current_version.txt');
+  $current_version = @file_get_contents('https://raw.githubusercontent.com/tds2021/Pi-Zero-W-Smart-USB-Flash-Drive/main/resource_files/current_version.txt', false, stream_context_create(['http' => ['timeout' => 3]]));
   $current_version_num = (float) preg_replace('/[^0-9]/', '', $current_version);
 } catch (exception $e) { }
 
@@ -21,6 +22,7 @@ try {
 <!doctype html>
 <html lang="en">
   <head>
+    <meta name="csrf-token" content="<?php echo htmlspecialchars($GLOBALS['csrf_token'], ENT_QUOTES); ?>">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="">
@@ -92,7 +94,7 @@ try {
       window.setInterval("reloadIMG();", 30000);
     }
       function reloadIMG() {
-        var temp = "http://<?php echo $ip_address ?>:8080/?action=stream&" + new Date().getTime();
+        var temp = "/camera_feed.php?refresh=" + new Date().getTime();
         newImage = new Image();
         newImage.src = temp;
         document.getElementById("videoStream").src = newImage.src;

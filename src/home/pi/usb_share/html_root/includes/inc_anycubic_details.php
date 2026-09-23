@@ -1,8 +1,10 @@
-<?php 
+<?php
+require_once __DIR__ . '/security.php';
+require_once __DIR__ . '/printer.php';
     $printer_dir = '/home/pi/usb_share/flags';
     $exec_dir = "/home/pi/usb_share/scripts";
 
-    $rebuilding_usb_share = file_exists($printer_dir . '/rebuilding_usb') ? 'true' : 'false';
+    $rebuilding_usb_share = in_array(trim(@file_get_contents($printer_dir . '/rebuilding_usb') ?: ''), ['queued', 'create_image', 'create_fs', 'stop_services'], true) ? 'true' : 'false';
     $anycubic_enabled = file_exists($printer_dir . '/enable_anycubic') ? 'true' : 'false';
     $camera_enabled = file_exists($printer_dir . '/enable_camera') ? 'true' : 'false';
     $wifi_enabled = file_exists($printer_dir . '/enable_wifi_file') ? 'true' : 'false';
@@ -10,8 +12,7 @@
 
     if(file_exists($printer_dir . '/printer_ip') )
     {
-        $output = shell_exec(escapeshellcmd('/home/pi/usb_share/scripts/anycubic_status.py'));
-        $printer_details = json_decode(str_replace("'",'"',$output));
+        $printer_details = (object) printer_snapshot();
 
         $printer_ip_address = $printer_details->ip_address;
         $printer_status = $printer_details->printer_status;

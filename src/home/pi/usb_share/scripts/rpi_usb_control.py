@@ -1,31 +1,10 @@
-#!/usr/bin/env python3
-
-import os
+#!/usr/bin/python3
 import argparse
+from usb_share_common import storage_lock, usb_control
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--action")
-
-args = parser.parse_args()
-
-action = str(args.action)
-
-
-
-if action == 'reset':
-    os.system("sudo rm -f /home/pi/usb_share/flags/usb_reset_status")
-
-    os.system("sudo echo 'stopping_usb' > /home/pi/usb_share/flags/usb_reset_status")
-    os.system("sudo modprobe -r g_mass_storage;")
-
-    os.system("sudo echo 'starting_usb' > /home/pi/usb_share/flags/usb_reset_status")
-    os.system("sudo modprobe g_mass_storage file=/home/pi/usb_share/usb_share_disk.img stall=0 ro=0 removable=1;")
-
-    os.system("sudo rm -f /home/pi/usb_share/flags/usb_reset_status")
-elif action == 'unplug':
-    os.system("sudo rm -f /home/pi/usb_share/flags/usb_reset_status")
-    
-    os.system("sudo echo 'stopping_usb' > /home/pi/usb_share/flags/usb_reset_status")
-    os.system("sudo modprobe -r g_mass_storage;")
-
-    os.system("sudo rm -f /home/pi/usb_share/flags/usb_reset_status")
+if __name__ == '__main__':
+    p = argparse.ArgumentParser()
+    p.add_argument('--action', required=True, choices=('reset', 'unplug'))
+    args = p.parse_args()
+    with storage_lock():
+        usb_control(args.action)

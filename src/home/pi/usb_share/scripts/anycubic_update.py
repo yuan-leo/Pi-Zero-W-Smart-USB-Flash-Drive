@@ -1,57 +1,46 @@
-#!/usr/bin/env python3
-
-import os
+#!/usr/bin/python3
 import argparse
-
-flag_dir = "/home/pi/usb_share/flags"
-script_dir = "/home/pi/usb_share/scripts"
-usb_share_dir = "/mnt/usb_share"
-
-parser = argparse.ArgumentParser()
-parser.add_argument("-a")
-parser.add_argument("--printer_ip")
-parser.add_argument("--printer_model")
-parser.add_argument("--enable_wifi")
-parser.add_argument("--enable_protection")
-args = parser.parse_args()
-
-action = str(args.a)
-printer_ip = str(args.printer_ip)
-printer_model = str(args.printer_model)
-enable_wifi = str(args.enable_wifi)
-enable_protection = str(args.enable_protection)
-
-if action == "update":
-
-    os.system("sudo rm -f " + flag_dir + "/printer_ip;")
-    os.system("sudo touch " + flag_dir + "/printer_ip;")
-    os.system("sudo chmod 666 " + flag_dir + "/printer_ip;")
-    os.system("sudo echo " + printer_ip + " >> " + flag_dir + "/printer_ip;")
-    
-    os.system("sudo rm -f " + flag_dir + "/printer_model;")
-    os.system("sudo touch " + flag_dir + "/printer_model;")
-    os.system("sudo chmod 666 " + flag_dir + "/printer_model;")
-    os.system("sudo echo " + printer_model + " >> " + flag_dir + "/printer_model;")
+from usb_share_common import BASE, FLAGS, atomic_write, printer_address, run, set_flag
 
 
-    if enable_wifi == "on" :
-        os.system("sudo rm -f " + flag_dir + "/enable_wifi_file;")
-        os.system("sudo touch " + flag_dir + "/enable_wifi_file;")
-        os.system("sudo systemctl daemon-reload;")
-        os.system("sudo systemctl enable anycubic_wifi.service;")
-        os.system("sudo systemctl start anycubic_wifi.service;")
-    else :
-        os.system("sudo systemctl stop anycubic_wifi.service;" )
-        os.system("sudo systemctl disable anycubic_wifi.service;")
-        os.system("sudo systemctl daemon-reload;")
-        os.system("sudo rm -f " + usb_share_dir + "/WIFI.txt")
-        os.system("sudo rm -f " + flag_dir + "/enable_wifi_file;")
+def update(args):
+    if args.a == 'update':
+        address = printer_address(args.printer_ip)
+        if args.printer_model not in ('photon mono x', 'photon mono se'):
+            raise ValueError('Unsupported printer model')
+        if args.enable_wifi not in ('on', 'off') or args.enable_protection not in ('on', 'off'):
+            raise ValueError('Invalid printer setting')
+        atomic_write(FLAGS / 'printer_ip', address)
+        atomic_write(FLAGS / 'printer_model', args.printer_model)
+        set_flag('disable_print_protection', args.enable_protection == 'off')
+        if args.enable_wifi == 'on':
+            run('/bin/systemctl', 'enable', '--now', 'anycubic_wifi.service')
+            set_flag('enable_wifi_file', True)
+        else:
+            run('/bin/systemctl', 'disable', '--now', 'anycubic_wifi.service')
+            set_flag('enable_wifi_file', False)
+            wifi = BASE / 'upload/WIFI.txt'
+            if wifi.exists():
+                wifi.unlink()
+    elif args.a == 'enable':
+        set_flag('enable_anycubic', True)
+    elif args.a == 'disable':
+        run('/bin/systemctl', 'disable', '--now', 'anycubic_wifi.service')
+        for name in ('printer_ip', 'printer_model', 'enable_wifi_file', 'enable_anycubic'):
+            set_flag(name, False)
+    else:
+        raise ValueError('Invalid update action')
 
-elif action == "enable":
-    os.system("sudo touch " + flag_dir + "/enable_anycubic;")
-    print("sudo touch " + flag_dir + "/enable_anycubic;")
-elif action == "disable":
-    os.system("sudo rm -f " + flag_dir + "/printer_ip;")
-    os.system("sudo rm -f " + flag_dir + "/printer_model;")
-    os.system("sudo rm -f " + flag_dir + "/enable_wifi_file;")
-    os.system("sudo rm -f " + flag_dir + "/enable_anycubic;")
+
+def parser():
+    p = argparse.ArgumentParser()
+    p.add_argument('-a', choices=('enable', 'disable', 'update'), required=True)
+    p.add_argument('--printer_ip')
+    p.add_argument('--printer_model')
+    p.add_argument('--enable_wifi', choices=('on', 'off'))
+    p.add_argument('--enable_protection', choices=('on', 'off'))
+    return p
+
+
+if __name__ == '__main__':
+    update(parser().parse_args())

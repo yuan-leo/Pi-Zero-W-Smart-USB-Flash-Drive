@@ -1,23 +1,26 @@
 <?php
-//$target_dir = "uploads/";
-$target_dir = "/home/pi/usb_share/upload/";
-$target_file = $target_dir . basename($_FILES["file"]["name"]);
-$uploadOk = 1;
-$imageFileType = strtolower(pathinfo($target_file,PATHINFO_EXTENSION));
-
-$cmd = "sudo echo '" . serialize($_FILES) . "' > /home/pi/usb_share/flags/upload_data";
-shell_exec($cmd);
-echo($cmd);
-// Check if $uploadOk is set to 0 by an error
-if ($uploadOk == 0) {
-  echo "Sorry, your file was not uploaded.";
-// if everything is ok, try to upload file
-} else {
-  if (move_uploaded_file($_FILES["file"]["tmp_name"], $target_file)) {
-    echo "The file ". htmlspecialchars( basename( $_FILES["file"]["name"])). " has been uploaded.";
-  } else {
-    echo "Sorry, there was an error uploading your file.";
-  }
+require_once __DIR__ . '/api.php';
+require_mutation();
+$file = $_FILES['file'] ?? null;
+if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK
+    || !is_string($file['name']) || !is_uploaded_file($file['tmp_name'])) {
+    fail_request('Upload failed or exceeded the configured size limit.');
 }
-//header( 'Location: /index.php' ) ;
-?>
+$lock = storage_lock();
+$path = upload_path($file['name']);
+if (file_exists($path)) fail_request('A file with that name already exists.', 409);
+if (filesize($file['tmp_name']) > disk_free_space(dirname($path)) - 1048576) {
+    fail_request('Insufficient USB storage.', 413);
+}
+$destination = @fopen($path, 'x+b'); // Atomic reservation also rejects symlink replacement races.
+if (!$destination) fail_request('The destination already exists or is not writable.', 409);
+$source = fopen($file['tmp_name'], 'rb');
+$copied = $source ? stream_copy_to_stream($source, $destination) : false;
+if ($source) fclose($source);
+$flushed = fflush($destination);
+fclose($destination);
+if ($copied === false || $copied !== filesize($file['tmp_name']) || !$flushed) {
+    @unlink($path);
+    fail_request('Could not store the complete upload.', 500);
+}
+echo json_encode(['status' => 'uploaded']);

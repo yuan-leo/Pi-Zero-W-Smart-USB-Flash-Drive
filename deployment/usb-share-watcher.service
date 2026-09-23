@@ -1,0 +1,14 @@
+[Unit]
+Description=USB Share file change watcher
+After=local-fs.target systemd-tmpfiles-setup.service
+RequiresMountsFor=/home/pi/usb_share/upload
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -E -s /usr/local/lib/usb-share/usb_share.py
+Restart=on-failure
+RestartSec=5
+UMask=0022
+
+[Install]
+WantedBy=multi-user.target
